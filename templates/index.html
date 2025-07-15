@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spoti Clone - Personal Music Player</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .music-card {
+            transition: all 0.3s ease;
+        }
+        .music-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .progress-bar {
+            transition: width 0.1s ease;
+        }
+        .progress-container {
+            position: relative;
+            cursor: pointer;
+        }
+        .progress-container:hover {
+            transform: scaleY(1.5);
+        }
+        .progress-container:active {
+            transform: scaleY(2);
+        }
+        .volume-slider {
+            background: linear-gradient(to right, #10b981 0%, #10b981 var(--volume, 100%), #374151 var(--volume, 100%), #374151 100%) !important;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #10b981;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .search-input {
+            transition: all 0.3s ease;
+        }
+        .search-input:focus {
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+        .loading-overlay {
+            backdrop-filter: blur(2px);
+        }
+        .music-card.disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .player-loading {
+            position: relative;
+            overflow: hidden;
+        }
+        .player-loading::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            animation: loading-shimmer 2s infinite;
+        }
+        @keyframes loading-shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .spinning {
+            animation: spin 3s linear infinite;
+        }
+        /* Add bottom padding to main content to prevent music player overlap */
+        main {
+            padding-bottom: 140px;
+        }
+        /* Mini player styles */
+        .mini-player {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 80px;
+            height: 80px;
+            background: #1f2937;
+            border-radius: 50%;
+            border: 3px solid #10b981;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .mini-player:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3);
+        }
+        .mini-player img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+    <!-- Header -->
+    <header class="gradient-bg shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <a href="{{ url_for('home') }}" class="flex items-center space-x-2">
+                        <i class="fas fa-music text-3xl text-white"></i>
+                        <h1 class="text-2xl font-bold text-white">Spoti Clone</h1>
+                    </a>
+                </div>
+                
+                <!-- Search Bar -->
+                <div class="flex-1 max-w-xl mx-8">
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            id="searchInput"
+                            placeholder="Cari lagu atau artis..." 
+                            class="search-input w-full px-4 py-3 pl-12 text-gray-900 bg-white rounded-full border-2 border-transparent focus:border-green-500 focus:outline-none"
+                        >
+                        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <button class="text-white hover:text-green-300 transition-colors">
+                        <i class="fas fa-user-circle text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-6 py-8">
+        <!-- Search Results (Hidden by default) -->
+        <div id="searchResults" class="hidden mb-8">
+            <h2 class="text-2xl font-bold mb-6">Hasil Pencarian</h2>
+            <div id="searchGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Search results will be populated here -->
+            </div>
+        </div>
+
+        <!-- Featured Music -->
+        <section id="featuredSection">
+            <h2 class="text-2xl font-bold mb-6">
+                Musik Trending</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {% for track in tracks %}
+                <div class="music-card bg-gray-800 rounded-lg p-4 cursor-pointer" onclick="if (!isLoading) playTrack('{{ track.id }}', '{{ track.name }}', '{{ track.artist }}', '{{ track.image_64 }}', '{{ track.image_300 }}')">
+                    <div class="relative mb-4">
+                        <img src="{{ track.image_300 }}" 
+                             alt="{{ track.name }}" 
+                             class="w-full h-48 rounded-lg">
+                        <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center rounded-lg">
+                            <i class="fas fa-play text-white text-3xl opacity-0 hover:opacity-100 transition-opacity duration-300"></i>
+                        </div>
+                    </div>
+                    <h3 class="font-semibold text-white mb-1 truncate">{{ track.name }}</h3>
+                    <p class="text-gray-400 text-sm truncate">{{ track.artist }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+
+        <!-- Queue Section -->
+        <section id="queueSection" class="mt-12 hidden">
+            <h2 class="text-2xl font-bold mb-6">Antrian Putar</h2>
+            <div id="queueList" class="space-y-2">
+                <!-- Queue items will be populated here -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Music Player (Bottom) -->
+    <div id="musicPlayer" class="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 p-4 hidden">
+        <!-- Loading Overlay -->
+        <div id="playerLoadingOverlay" class="absolute inset-0 bg-gray-800 bg-opacity-90 flex items-center justify-center hidden">
+            <div class="flex items-center space-x-3 text-white">
+                <i class="fas fa-spinner fa-spin text-2xl"></i>
+                <span class="text-lg">Memuat musik...</span>
+            </div>
+        </div>
+        
+        <!-- Close Button -->
+        <button id="closePlayerBtn" class="absolute top-2 right-2 text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-times text-lg"></i>
+        </button>
+        
+        <div class="container mx-auto">
+            <div class="flex items-center justify-between">
+                <!-- Track Info -->
+                <div class="flex items-center space-x-4 flex-1">
+                    <img id="currentTrackImage" src="" alt="" class="w-16 h-16 rounded-lg object-cover">
+                    <div>
+                        <h3 id="currentTrackName" class="font-semibold text-white">-</h3>
+                        <p id="currentTrackArtist" class="text-gray-400 text-sm">-</p>
+                    </div>
+                </div>
+
+                <!-- Player Controls -->
+                <div class="flex items-center space-x-6 flex-1 justify-center">
+                    <button id="prevBtn" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-step-backward text-xl"></i>
+                    </button>
+                    <button id="playPauseBtn" class="bg-green-500 hover:bg-green-600 text-white rounded-full w-12 h-12 flex items-center justify-center transition-colors">
+                        <i class="fas fa-play text-lg"></i>
+                    </button>
+                    <button id="nextBtn" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-step-forward text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Volume Control -->
+                <div class="flex items-center space-x-4 flex-1 justify-end">
+                    <i class="fas fa-volume-up text-gray-400"></i>
+                    <input type="range" id="volumeSlider" min="0" max="100" value="100" 
+                           class="volume-slider w-24 h-2 rounded-full appearance-none cursor-pointer">
+                    <button id="queueBtn" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fas fa-list text-lg"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="mt-4">
+                <div class="flex items-center space-x-4">
+                    <span id="currentTime" class="text-xs text-gray-400">0:00</span>
+                    <div class="flex-1 bg-gray-600 rounded-full h-1 cursor-pointer progress-container" id="progressContainer">
+                        <div id="progressBar" class="progress-bar bg-green-500 h-1 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <span id="totalTime" class="text-xs text-gray-400">0:00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mini Player (when main player is hidden) -->
+    <div id="miniPlayer" class="mini-player hidden" onclick="showMainPlayer()">
+        <img id="miniPlayerImage" src="" alt="" class="spinning">
+    </div>
+
+    <!-- Audio Element -->
+    <audio id="audioPlayer" preload="metadata"></audio>
+
+    <script>
+        // Global variables
+        let currentTrack = null;
+        let isPlaying = false;
+        let currentQueue = [];
+        let currentQueueIndex = 0;
+        let searchTimeout = null;
+        let isLoading = false;
+        let isSeeking = false;
+
+        // DOM elements
+        const audioPlayer = document.getElementById('audioPlayer');
+        const musicPlayer = document.getElementById('musicPlayer');
+        const miniPlayer = document.getElementById('miniPlayer');
+        const miniPlayerImage = document.getElementById('miniPlayerImage');
+        const closePlayerBtn = document.getElementById('closePlayerBtn');
+        const playerLoadingOverlay = document.getElementById('playerLoadingOverlay');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const currentTrackName = document.getElementById('currentTrackName');
+        const currentTrackArtist = document.getElementById('currentTrackArtist');
+        const currentTrackImage = document.getElementById('currentTrackImage');
+        const progressBar = document.getElementById('progressBar');
+        const progressContainer = document.getElementById('progressContainer');
+        const currentTime = document.getElementById('currentTime');
+        const totalTime = document.getElementById('totalTime');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const searchInput = document.getElementById('searchInput');
+        const searchResults = document.getElementById('searchResults');
+        const searchGrid = document.getElementById('searchGrid');
+        const featuredSection = document.getElementById('featuredSection');
+        const queueSection = document.getElementById('queueSection');
+        const queueList = document.getElementById('queueList');
+        const nextBtn = document.getElementById('nextBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const queueBtn = document.getElementById('queueBtn');
+
+        // Global variables for event handlers
+        let canPlayThroughHandler = null;
+        let errorHandler = null;
+
+        // Show/Hide Player Functions
+        function showMainPlayer() {
+            musicPlayer.classList.remove('hidden');
+            miniPlayer.classList.add('hidden');
+        }
+
+        function showMiniPlayer() {
+            musicPlayer.classList.add('hidden');
+            miniPlayer.classList.remove('hidden');
+        }
+
+        // Close player button event
+        closePlayerBtn.addEventListener('click', () => {
+            // Don't close if no track is playing
+            if (!currentTrack) return;
+            
+            showMiniPlayer();
+        });
+
+        // Play track function
+        function playTrack(id, name, artist, image_64, image_300) {
+
+            // Prevent multiple simultaneous loads
+            if (isLoading) {
+                return;
+            }
+            
+            isLoading = true;
+            currentTrack = { id, name, artist, image_64, image_300 };
+            
+            // Clean up previous event listeners
+            if (canPlayThroughHandler) {
+                audioPlayer.removeEventListener('canplaythrough', canPlayThroughHandler);
+            }
+            if (errorHandler) {
+                audioPlayer.removeEventListener('error', errorHandler);
+            }
+            
+            // Reset audio player
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            
+            // Update UI
+            currentTrackName.textContent = name;
+            currentTrackArtist.textContent = artist;
+            currentTrackImage.src = image_64;
+            miniPlayerImage.src = image_64;
+            
+            // Show player and loading state
+            musicPlayer.classList.remove('hidden');
+            miniPlayer.classList.add('hidden'); // Hide mini player when main player is shown
+            setLoadingState(true);
+            
+            // Get the actual audio URL from the backend
+            fetch(`/play/${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && !data.error) {
+                        audioPlayer.src = data;
+                        
+                        // Create new event handlers
+                        canPlayThroughHandler = function() {
+                            audioPlayer.play().then(() => {
+                                isPlaying = true;
+                                isLoading = false;
+                                setLoadingState(false);
+                                updatePlayButton();
+                                loadRecommendations(name);
+                            }).catch((error) => {
+                                console.error('Error playing audio:', error);
+                                isLoading = false;
+                                setLoadingState(false);
+                                showError('Gagal memutar audio');
+                            });
+                            
+                            // Remove this handler after first use
+                            audioPlayer.removeEventListener('canplaythrough', canPlayThroughHandler);
+                            canPlayThroughHandler = null;
+                        };
+                        
+                        errorHandler = function() {
+                            isLoading = false;
+                            setLoadingState(false);
+                            showError('Gagal memuat audio');
+                            audioPlayer.removeEventListener('error', errorHandler);
+                            errorHandler = null;
+                        };
+                        
+                        // Add event listeners
+                        audioPlayer.addEventListener('canplaythrough', canPlayThroughHandler);
+                        audioPlayer.addEventListener('error', errorHandler);
+                        
+                    } else {
+                        isLoading = false;
+                        setLoadingState(false);
+                        showError('Audio tidak ditemukan');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching audio:', error);
+                    isLoading = false;
+                    setLoadingState(false);
+                    showError('Gagal memuat lagu');
+                });
+        }
+
+        // Update play button
+        function updatePlayButton() {
+            const icon = playPauseBtn.querySelector('i');
+            if (isLoading) {
+                icon.className = 'fas fa-spinner fa-spin text-lg';
+                playPauseBtn.disabled = true;
+                playPauseBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else if (isPlaying) {
+                icon.className = 'fas fa-pause text-lg';
+                playPauseBtn.disabled = false;
+                playPauseBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                icon.className = 'fas fa-play text-lg';
+                playPauseBtn.disabled = false;
+                playPauseBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // Set loading state
+        function setLoadingState(loading) {
+            isLoading = loading;
+            
+            // Show/hide loading overlay
+            if (loading) {
+                playerLoadingOverlay.classList.remove('hidden');
+            } else {
+                playerLoadingOverlay.classList.add('hidden');
+            }
+            
+            // Disable/enable all player controls
+            const controls = [playPauseBtn, prevBtn, nextBtn, volumeSlider];
+            if (!isDragging) {
+                controls.push(progressContainer);
+            }
+            controls.forEach(control => {
+                if (loading) {
+                    control.disabled = true;
+                    control.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+                } else {
+                    control.disabled = false;
+                    control.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+                }
+            });
+            
+            // Disable/enable all music cards
+            const musicCards = document.querySelectorAll('.music-card');
+            musicCards.forEach(card => {
+                if (loading) {
+                    card.classList.add('disabled');
+                } else {
+                    card.classList.remove('disabled');
+                }
+            });
+            
+            updatePlayButton();
+        }
+
+        // Show error message
+        function showError(message) {
+            // Create error notification
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2';
+            errorDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()" class="ml-2 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            document.body.appendChild(errorDiv);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (errorDiv.parentElement) {
+                    errorDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Play/Pause toggle
+        playPauseBtn.addEventListener('click', () => {
+            // Prevent interaction during loading
+            if (isLoading) {
+                return;
+            }
+            
+            if (isPlaying) {
+                audioPlayer.pause();
+                isPlaying = false;
+            } else {
+                audioPlayer.play().then(() => {
+                    isPlaying = true;
+                }).catch((error) => {
+                    console.error('Error playing audio:', error);
+                    showError('Gagal memutar audio');
+                });
+            }
+            updatePlayButton();
+        });
+
+        // Audio event listeners
+        audioPlayer.addEventListener('timeupdate', () => {
+            // Don't update progress if we're currently seeking
+            if (isSeeking || isLoading) {
+                return;
+            }
+            
+            if (audioPlayer.duration) {
+                const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                progressBar.style.width = progress + '%';
+                currentTime.textContent = formatTime(audioPlayer.currentTime);
+            }
+        });
+
+        audioPlayer.addEventListener('loadedmetadata', () => {
+            totalTime.textContent = formatTime(audioPlayer.duration);
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            // Auto play next track
+            playNextTrack();
+        });
+
+        audioPlayer.addEventListener('play', () => {
+            isPlaying = true;
+            updatePlayButton();
+            // Start spinning animation on mini player
+            miniPlayerImage.classList.add('spinning');
+        });
+
+        // Handle pausing
+        audioPlayer.addEventListener('pause', () => {
+            isPlaying = false;
+            updatePlayButton();
+            // Stop spinning animation on mini player
+            miniPlayerImage.classList.remove('spinning');
+        });
+
+        // Handle seeking events (disabled for streaming compatibility)
+        audioPlayer.addEventListener('seeking', () => {
+            // Prevent seeking to avoid reset issues with streaming URLs
+            console.log('Seeking blocked to prevent audio reset');
+        });
+
+        audioPlayer.addEventListener('seeked', () => {
+            // Seeking completed but we don't allow manual seeks
+            console.log('Seek completed');
+        });
+
+        // Global variables for drag functionality (disabled)
+        let isDragging = false;
+
+        // Progress bar - display only (no seeking functionality)
+        progressContainer.addEventListener('mousedown', (e) => {
+            // Prevent seeking interaction
+            e.preventDefault();
+            return false;
+        });
+
+        progressContainer.addEventListener('click', (e) => {
+            // Prevent seeking interaction
+            e.preventDefault();
+            return false;
+        });
+
+        // Disable drag functionality to prevent seeking
+        document.addEventListener('mousemove', (e) => {
+            // No drag functionality for progress bar
+        });
+
+        document.addEventListener('mouseup', () => {
+            // No drag functionality for progress bar
+        });
+
+        // Progress bar is now display-only
+        function updateProgressFromMouse(e) {
+            // This function is disabled to prevent seeking issues
+            console.log('Progress bar seeking is disabled');
+            return;
+        }
+
+        // Volume control
+        volumeSlider.addEventListener('input', (e) => {
+            const volume = e.target.value / 100;
+            audioPlayer.volume = volume;
+            volumeSlider.style.setProperty('--volume', e.target.value + '%');
+        });
+
+        // Search functionality
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            if (query === '') {
+                showFeaturedSection();
+                return;
+            }
+            
+            // Delay search to avoid too many requests
+            searchTimeout = setTimeout(() => {
+                performSearch(query);
+            }, 500);
+        });
+
+        // Perform search
+        async function performSearch(query) {
+            try {
+                const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                const tracks = await response.json();
+                displaySearchResults(tracks);
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }
+
+        // Display search results
+        function displaySearchResults(tracks) {
+            searchGrid.innerHTML = '';
+            
+            if (tracks.length === 0) {
+                searchGrid.innerHTML = '<p class="text-gray-400 col-span-full text-center">Tidak ada hasil ditemukan</p>';
+            } else {
+                tracks.forEach(track => {
+                    const trackElement = createTrackElement(track);
+                    searchGrid.appendChild(trackElement);
+                });
+            }
+            
+            featuredSection.classList.add('hidden');
+            searchResults.classList.remove('hidden');
+        }
+
+        // Show featured section
+        function showFeaturedSection() {
+            searchResults.classList.add('hidden');
+            featuredSection.classList.remove('hidden');
+        }
+
+        // Create track element
+        function createTrackElement(track) {
+            const div = document.createElement('div');
+            div.className = 'music-card bg-gray-800 rounded-lg p-4 cursor-pointer';
+            div.onclick = () => {
+                // Prevent clicking during loading
+                if (isLoading) {
+                    return;
+                }
+                playTrack(track.id, track.name, track.artist, track.image_64, track.image_300);
+            };
+            
+            div.innerHTML = `
+                <div class="relative mb-4">
+                    <img src="${track.image_300}" 
+                         alt="${track.name}" 
+                         class="w-full h-48 object-cover rounded-lg">
+                    <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center rounded-lg">
+                        <i class="fas fa-play text-white text-3xl opacity-0 hover:opacity-100 transition-opacity duration-300"></i>
+                    </div>
+                </div>
+                <h3 class="font-semibold text-white mb-1 truncate">${track.name}</h3>
+                <p class="text-gray-400 text-sm truncate">${track.artist}</p>
+            `;
+            
+            return div;
+        }
+
+        // Load recommendations
+        async function loadRecommendations(names) {
+            try {
+                const response = await fetch(`/recommendations/${encodeURIComponent(names)}`);
+                const recommendations = await response.json();
+                
+                // Filter out the currently playing track
+                const filteredRecommendations = recommendations.filter(track => {
+                    return currentTrack && track.id !== currentTrack.id;
+                });
+                
+                currentQueue = filteredRecommendations;
+                currentQueueIndex = 0;
+                updateQueueDisplay();
+            } catch (error) {
+                console.error('Error loading recommendations:', error);
+            }
+        }
+
+        // Play next track
+        function playNextTrack() {
+            // Prevent interaction during loading
+            if (isLoading) {
+                return;
+            }
+            
+            if (currentQueue.length > 0 && currentQueueIndex < currentQueue.length - 1) {
+                currentQueueIndex++;
+                const nextTrack = currentQueue[currentQueueIndex];
+                playTrack(nextTrack.id, nextTrack.name, nextTrack.artist, nextTrack.image_64, nextTrack.image_300);
+            }
+        }
+
+        // Play previous track
+        function playPrevTrack() {
+            // Prevent interaction during loading
+            if (isLoading) {
+                return;
+            }
+            
+            // Check if we can go back in current queue
+            if (currentQueue.length > 0 && currentQueueIndex > 0) {
+                currentQueueIndex--;
+                const prevTrack = currentQueue[currentQueueIndex];
+                playTrack(prevTrack.id, prevTrack.name, prevTrack.artist, prevTrack.image_64, prevTrack.image_300);
+            } else if (audioPlayer.currentTime > 3) {
+                // If more than 3 seconds have passed, restart current track
+                audioPlayer.currentTime = 0;
+            }
+        }
+
+        // Next/Previous button events
+        nextBtn.addEventListener('click', playNextTrack);
+        prevBtn.addEventListener('click', playPrevTrack);
+
+        // Queue button toggle
+        queueBtn.addEventListener('click', () => {
+            queueSection.classList.toggle('hidden');
+            
+            // If queue is now visible, scroll to it smoothly
+            if (!queueSection.classList.contains('hidden')) {
+                queueSection.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'start' 
+                });
+            }
+        });
+
+        // Update queue display
+        function updateQueueDisplay() {
+            queueList.innerHTML = '';
+            
+            // Filter queue to exclude currently playing track by name
+            const filteredQueue = currentQueue.filter(track => {
+            return !currentTrack || track.name !== currentTrack.name;
+            });
+            
+            if (filteredQueue.length === 0) {
+            queueList.innerHTML = '<p class="text-gray-400 text-center py-4">Tidak ada lagu dalam antrian</p>';
+            return;
+            }
+            
+            filteredQueue.forEach((track, index) => {
+            const div = document.createElement('div');
+            div.className = `flex items-center space-x-4 p-3 rounded-lg cursor-pointer bg-gray-700 hover:bg-gray-600 transition-colors`;
+            div.onclick = () => {
+                // Prevent clicking during loading
+                if (isLoading) {
+                return;
+                }
+                // Find the original index in the unfiltered queue by name
+                const originalIndex = currentQueue.findIndex(queueTrack => queueTrack.name === track.name);
+                if (originalIndex !== -1) {
+                currentQueueIndex = originalIndex;
+                playTrack(track.id, track.name, track.artist, track.image_64, track.image_300);
+                }
+            };
+            
+            div.innerHTML = `
+                <img src="${track.image_64}" 
+                 alt="${track.name}" 
+                 class="w-12 h-12 rounded object-cover">
+                <div class="flex-1">
+                <h4 class="font-medium text-white">${track.name}</h4>
+                <p class="text-gray-400 text-sm">${track.artist}</p>
+                </div>
+                <span class="text-gray-400 text-sm">${formatTime(track.duration / 1000)}</span>
+            `;
+            
+            queueList.appendChild(div);
+            });
+        }
+
+        // Format time helper
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        // Initialize volume slider style
+        volumeSlider.style.setProperty('--volume', '100%');
+    </script>
+</body>
+</html>
