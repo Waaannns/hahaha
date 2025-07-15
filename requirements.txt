@@ -6,3 +6,4 @@ pyotp
 click
 pyyaml
 rich
+gunicorn
